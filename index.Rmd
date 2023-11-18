@@ -1,0 +1,465 @@
+---
+title: "Entrega 3"
+author: "Integrantes: Luis Rosales y Bayardo Mujica "
+author1: "Jefe de práctica: Alexander Benites"
+author2: "Profesor: José Manuel Magallanes Reyes "
+date: '2023-2'
+subtitle: 'Curso: POL304 - Estadística para el análisis político 2'
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    
+---
+
+```{r include=FALSE}
+library(flexdashboard)
+```
+
+```{r include=FALSE}
+# Librerías
+library(AER)
+library(BBmisc)
+library(cluster)
+library(DescTools)
+library(dplyr)
+library(DT)
+library(factoextra)
+library(flexdashboard)
+library(ggplot2)
+library(ggrepel)
+library(kableExtra)
+library(knitr)
+library(lsr)
+library(MASS)
+library(magrittr)
+library(modelsummary)
+library(readr)
+library(rvest)
+library(rio)
+library(sjPlot)
+library(summarytools)
+library(tidyverse)
+
+link_datacrimen = "https://github.com/Rosales2003/Estadistica-Politica-2/raw/main/Data_Eurasia_Crimen.xlsx"
+
+datacrimen = import(link_datacrimen)
+```
+
+```{r include=FALSE}
+str(datacrimen) # Preparando data
+datacrimen$CONTINENTE = as.factor(datacrimen$CONTINENTE)
+datacrimen$CRIMEN = as.numeric(datacrimen$CRIMEN)
+datacrimen$ALFABETO = as.numeric(datacrimen$ALFABETO)
+datacrimen$INMIGRANTES = as.numeric(datacrimen$INMIGRANTES)
+datacrimen$REGIMEN_POL = as.factor(datacrimen$REGIMEN_POL)
+datacrimen$PBI = as.numeric(datacrimen$PBI)
+datacrimen$IDH = as.numeric(datacrimen$IDH)
+
+datacrimen = datacrimen[complete.cases(datacrimen), ]
+```
+
+```{r include=FALSE}
+dataClus = datacrimen[, c(4, 5, 7, 8)]
+row.names(dataClus) = datacrimen$PAIS
+```
+
+```{r include=FALSE}
+g.dist = daisy(dataClus, metric = "gower")
+```
+
+
+# Performance de la criminalidad en Euroasia
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Tabla de criminalidad en países de Europa y Asia
+
+```{r include=FALSE}
+crimen = datacrimen[,c(2:6)]
+```
+
+```{r echo=FALSE}
+datatable(crimen, filter = "top")
+```
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### En resumen... 
+
+
+
+
+
+
+
+# Análisis de conglomerados
+
+## Column {data-width="500"} {.tabset}
+
+```{r include=FALSE}
+# Estrategia de Partición
+fviz_nbclust(dataClus, pam,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F)
+```
+
+```{r include=FALSE}
+# Vamos a pedirle 3:
+set.seed(123)
+res.pam=pam(g.dist,3,cluster.only = F)
+dataClus$pam=res.pam$cluster
+```
+
+```{r include=FALSE}
+fviz_silhouette(res.pam,print.summary = F)
+```
+
+```{r include=FALSE}
+silPAM=data.frame(res.pam$silinfo$widths)
+silPAM$country=row.names(silPAM)
+poorPAM=silPAM[silPAM$sil_width<0,'country']%>%sort()
+poorPAM
+```
+
+```{r include=FALSE}
+aggregate(.~ pam, data=dataClus,mean)
+```
+
+```{r include=FALSE}
+datacrimen$pamIDH=datacrimen$PAIS%in%poorPAM
+datacrimen$pamIDH=as.ordered(dataClus$pam)
+dataClus$pam=NULL
+```
+
+```{r include=FALSE}
+## Estrategia Jerárquica
+
+fviz_nbclust(dataClus, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F,hc_func = "agnes")
+```
+
+```{r include=FALSE}
+# Pido tres:
+set.seed(123)
+res.agnes<- hcut(g.dist, k = 3,hc_func='agnes',hc_method = "ward.D")
+dataClus$agnes=res.agnes$cluster
+```
+
+```{r include=FALSE}
+# Mismo promedio que con PAM:
+
+fviz_silhouette(res.agnes,print.summary = F)
+```
+
+```{r include=FALSE}
+silAGNES=data.frame(res.agnes$silinfo$widths)
+silAGNES$country=row.names(silAGNES)
+poorAGNES=silAGNES[silAGNES$sil_width<0,'country']%>%sort()
+poorAGNES
+```
+
+```{r include=FALSE}
+aggregate(.~ agnes, data=dataClus,mean)
+```
+
+```{r include=FALSE}
+datacrimen$agnesIDHpoor=datacrimen$PAIS%in%poorAGNES
+datacrimen$agnesIDH=as.ordered(dataClus$agnes)
+dataClus$agnes=NULL
+```
+
+```{r include=FALSE}
+# Estrategia Aglomerativa
+fviz_nbclust(dataClus, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F,hc_func = "diana")
+```
+
+```{r include=FALSE}
+set.seed(123)
+res.diana <- hcut(g.dist, k = 3,hc_func='diana')
+dataClus$diana=res.diana$cluster
+```
+
+### DIANA
+
+```{r}
+fviz_silhouette(res.diana,print.summary = F)
+```
+
+```{r include=FALSE}
+silDIANA=data.frame(res.diana$silinfo$widths)
+silDIANA$country=row.names(silDIANA)
+poorDIANA=silDIANA[silDIANA$sil_width<0,'country']%>%sort()
+poorDIANA
+```
+
+### Tabla de Promedios por Agrupación de Conglomerado
+
+```{r}
+aggregate(.~ diana, data=dataClus,mean)
+```
+
+```{r include=FALSE}
+datacrimen$dianaIDHpoor=datacrimen$PAIS%in%poorDIANA
+datacrimen$dianaIDH=as.ordered(dataClus$diana)
+dataClus$diana=NULL
+```
+
+
+## Column {data-width="500"} {.tabset}
+
+### Distribución espacial de conglomerados
+
+```{r include=FALSE}
+proyeccion = cmdscale(g.dist, k=2,add = T) 
+head(proyeccion$points,20)
+```
+
+```{r include=FALSE}
+datacrimen$dim1 <- proyeccion$points[,1]
+datacrimen$dim2 <- proyeccion$points[,2]
+```
+
+```{r echo=FALSE}
+base= ggplot(datacrimen,aes(x=dim1, y=dim2,label=row.names(dataClus))) 
+base + geom_text_repel(size=3, max.overlaps = 50,min.segment.length = unit(0, 'lines'))
+```
+
+### Distribución Bidimensinonal de conglomerados
+
+```{r echo=FALSE}
+DIANAlabels=ifelse(datacrimen$dianaIDHpoor,datacrimen$PAIS,'')
+
+dianaPlot=base + geom_point(size=3,
+                            aes(color=dianaIDH)) + 
+          labs(title = "DIANA")
+
+dianaPlot + geom_text_repel(size=4,
+                            aes(label=PAIS), 
+                            max.overlaps = 50,
+                            min.segment.length = unit(0, 'lines'))
+```
+
+
+```{r include=FALSE}
+library(rgdal)
+library(sp)
+```
+
+```{r include=FALSE}
+
+#debemos agregar el ISO para el mapa
+
+ISO = "https://gist.github.com/brenes/1095110/raw/c8f208b03485ba28f97c500ab7271e8bce43b9c6/paises.csv"
+dataISO = read.csv(ISO)
+
+#Eliminando columnas innecesarias:
+dataISO = dataISO[, -c(2:4, 6)]
+
+newnames = c("PAIS", "ISO3_CODE")
+names(dataISO) = newnames
+
+dataISOvar = merge(datacrimen, dataISO, by = "PAIS")
+```
+
+
+```{r include=FALSE}
+## SUBDATA: VARIABLE INDEPENDIENTE, PAIS E ISO:
+varindep = dataISOvar[, c(1, 3, 16)]
+```
+
+
+```{r include=FALSE}
+mapDIS = sf::read_sf("./SHAPEFILES/shapes_mundo.shp") # shapefile
+```
+
+### Visualización del Crimen en Europa y Asia 
+
+```{r include=FALSE}
+mapDIS2 = merge(mapDIS,
+                varindep,
+                by.x = 'ISO3_CODE',
+                by.y = 'ISO3_CODE',
+                all.x = T) #siempre primero el shape
+names(mapDIS2)
+```
+
+```{r echo=FALSE, fig.height=5.55, fig.show='hold', fig.width=9.5, message=FALSE, warning=FALSE}
+
+### Mapa de variable dependiente
+
+mapaleyendaL = ggplot(mapDIS2) + geom_sf() + theme_light()
+
+mapaleyL = mapaleyendaL + geom_sf(data = mapDIS2,
+                                  aes(fill = CRIMEN),
+                                  color = "gray")
+
+mapa = mapaleyL + coord_sf() + theme_void() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        legend.position = "bottom") + 
+  labs(fill = " ") + theme(legend.text = element_text(size = 10)) +
+  labs(title = "índice de criminalidad en Euroasia") +
+  theme(plot.title = element_text(color = "black",
+                                  size = 10,
+                                  face = "bold")
+        )
+
+mapa
+```
+
+### ¿Qué quiere decir esto?
+
+  - A partir de nuestra variable dependiente podemos observar una distribución territorial de la siguiente manera:
+
+  -   Los países de Asia suelen tener mayor indice de tasa de Criminalidad, ya que muchos de ellos estan por encima de 40 y 60 del indice. .
+
+  -   En varios países de Eurpa existen indices de criminalidad menores de 40; a excepción del norte donde figura entre 40 a 60 de indice de criminalidad; lo que indica que en Europa hay mejores politicas para combatir la criminalidad a pesar del proceso migratorio que hay en el continente europeo que es mayor al de Asia. 
+
+
+
+
+# Clustering
+
+Column {data-width=600} {.tabset}
+-----------------------------------------------------------------------
+
+### Clustering vía PAM
+
+```{r include=FALSE}
+dataClus$PAIS = row.names(dataClus)
+row.names(dataClus) = NULL
+```
+
+```{r include=FALSE}
+datacrimen = merge(datacrimen, dataClus, by = "PAIS")
+datacrimen$pamIDH = factor(datacrimen$pamIDH)
+```
+
+```{r include=FALSE}
+mapDIS3=merge(mapDIS,dataISOvar, 
+              by.x='ISO3_CODE', 
+              by.y='ISO3_CODE', 
+              all.x = T) 
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE,eval=TRUE,fig.show='hold',fig.width=9.5,fig.height=5.55, fig.align="center"}
+
+mapaleyendaL = ggplot(mapDIS3) + geom_sf() + theme_light()
+
+mapaleyL = mapaleyendaL + geom_sf(data = mapDIS3,
+                                  aes(fill = pamIDH), color = "gray")
+
+mapa3 = mapaleyL +
+  coord_sf() +
+  scale_fill_manual(values = c("#29211F", "#65A752", "#1C6AA8", "#D72E3E")) + 
+  theme_void() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        legend.position = c(1.1, 0.55)
+        ) + 
+  labs(fill = " ") + theme(legend.text = element_text(size = 13)) + 
+  labs(title = "3 clusters", 
+       caption = "Fuente: Elaboración propia.") +
+  theme(plot.title = element_text(color = "black",
+                                  size = 15,
+                                  face = "bold"),
+        plot.caption = element_text(color = "black", size = 10)
+  )
+
+mapa3
+```
+
+
+Column {data-width=400} {.tabset}
+-----------------------------------------------------------------------
+
+### ¿Qué quiere decir esto?
+
+  -   Al separar los países por clusteres vemos como se acentúa más lo planteado de los países mencionados, especialmente con China e India al ver como son los únicos países que pertenecen a ese cluster o al menos los únicos que posean una relevancia considerable al estudio. Se ve como los factores pueden explicar dicha situacion de criminalidad y, por ende, porque se encuentran juntos en el cluster. 
+
+  - Se puede ver que la gran mayoria de paises del norte europeo pertenecen al mismo cluster por la razon de que muchos de ellos tienen una similitud en su tasa de migraciones. 
+  
+  -   Por ultimo, observamos de que la gran mayoria de paises de Asia pertenecen al mismo cluster, ya que muchos de ellos comparten el indice de migrantes y la tasa de IDH entre ellos. Lo que explica que muchos de ellos tienden a tener similitudes en el indice de criminalidad por el hecho de las variables que condicionan al indice de criminalidad
+
+
+# Modelando la criminidalidad
+
+```{r include=FALSE}
+link_datacrimen2 = "https://github.com/krlos20203563/Entregable_Estadistica/raw/main/Data_Eurasia_Crimen.xlsx"
+datacrimen2 = import(link_datacrimen2)
+```
+
+```{r include=FALSE}
+datacrimen2$CONTINENTE = as.factor(datacrimen2$CONTINENTE)
+datacrimen2$CRIMEN = as.numeric(datacrimen2$CRIMEN)
+datacrimen2$ALFABETO = as.numeric(datacrimen2$ALFABETO)
+datacrimen2$INMIGRANTES = as.numeric(datacrimen2$INMIGRANTES)
+datacrimen2$REGIMEN_POL = as.factor(datacrimen2$REGIMEN_POL)
+datacrimen2$PBI = as.numeric(datacrimen2$PBI)
+datacrimen2$IDH = as.numeric(datacrimen2$IDH)
+
+datacrimen2 = na.omit(datacrimen2)
+```
+
+```{r include=FALSE}
+modelo1 = lm(CRIMEN ~ ALFABETO + REGIMEN_POL + INMIGRANTES, data = datacrimen2)
+summary(modelo1)
+```
+
+```{r include=FALSE}
+modelo2 = lm(CRIMEN ~ ALFABETO + REGIMEN_POL + INMIGRANTES + CONTINENTE +
+               PBI + IDH,
+             data = datacrimen2)
+summary(modelo2)
+```
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### OLS
+
+```{r}
+models=list('CM[1]'=modelo1,
+            'CM[2]'=modelo2)
+modelsummary(models, title = "Resultados de todos los modelos",
+             stars = TRUE,
+             output = "kableExtra")
+```
+
+
+
+Column {data-width=400} {.tabset}
+-----------------------------------------------------------------------
+
+```{r}
+cor_g = datacrimen2[, c("CRIMEN",
+                        "ALFABETO",
+                        "REGIMEN_POL",
+                        "INMIGRANTES",
+                        "CONTINENTE",
+                        "PBI",
+                        "IDH")]
+```
+
+```{r}
+library(polycor)
+corMatrix=polycor::hetcor(cor_g)$correlations
+```
+
+### ¿Qué quiere decir esto?
+
+- La criminalidad en los paises esta condicionada por el nivel de alfabetización de los paises, su regimen politico y tasa de inmigrantes; sin contar las variables de control.
+
+- Se ve que si afecta de manera positiva las variables independientes a la variable dependiente; ademas de que es un modelo valido teniendo en cuenta el pvalue. Asimismo, las variables independientes a excepción de Monarquia tienden a afectar el modelo y a la variable dependiente. **
+
+- La criminalidad en los paises esta condicionada por el nivel de alfabetización de los paises, su regimen politico y tasa de inmigrantes; tomando en cuenta las variables de control. 
+
+- Se puede ver que las variables de control hicieron de que aumente el modelo de manera positiva; asimismo, sigue siendo valido por el pvalue. Por otro lado, solo Monarquía y el IDH afectan al modelo de manera significativa.
+
+### OLS
+
+```{r}
+library(ggcorrplot)
+ggcorrplot(corMatrix)
+```
